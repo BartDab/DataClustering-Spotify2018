@@ -37,12 +37,24 @@ library(tidyverse)
 library(outliers)
 library(pacman)
 pacman::p_load(pacman,dplyr, ggplot2, plotly,tidyr, rio, gridExtra, scales, ggcorrplot, caret, e1071)
+library(ape)
 ```
 
-Następnie oglądam swoje dane, i, nie przedłużając, badam korelacje pomiędzy zmiennymi.
+Importuję swoje dane i delikatnie je obrabiam - usuwam zbędną do analizy kolumnę __id__, a __name__ i __artists__, wraz z nowoutworzonym __id__, czyli numerem, łączę i ustawiam jako nazwę wierszy - w ten sposób będę mógł łatwo identyfikować utwory, oraz widzieć, które miejsce zajmują w rankingu odsłuchań.
 
 ```{r}
+top2018<-read.csv("E:/R/top2018.csv", header=TRUE, sep=",")
+top2018<-top2018[,-1]
+top2018<-unite(top2018, track, into=c("artists","name"), sep=' - ')
+top2018 <- top2018 %>% mutate(id = row_number())
+top2018<-unite(top2018, track, into=c("id","track"), sep='. ')
+top2018<-column_to_rownames(top2018,var="track")  
 head(top2018)
+```
+
+Następnie oglądam swoje dane i badam korelacje pomiędzy zmiennymi.
+
+```{r}
 summary(top2018)
 corr<-round(cor(top2018),2)
 corr
@@ -54,15 +66,13 @@ Na tym etapie nie widać nic podejrzanego - najwyższa korelacja występuje pomi
 
 ```{r}
 wz<-c()
-#top2018[12]
 for (i in 1:13)(
   wz[i]=sd(top2018[,i])/mean(top2018[,i])
 )
 wz
-#top2018[4]
 ```
 
-Widać, że time_signature to zmienna quasi-stała, co znajduje potwierdzenie po przejrzeniu danych w kolumnie - prawie same 4... Bardzo wysoką zmienność mają mode, spechiness, acousticness i instrumentalness, aż zaczynam się zastanawiać, czy nie zbyt wysoką. Tak duże współczynniki prawdopodobnie mogą oznaczać duże rozbicie danych, a więc sporo outlierów. Ale na razie pozbywam się tylko time_signature.
+Widać, że time_signature to zmienna quasi-stała, co znajduje potwierdzenie po przejrzeniu danych w kolumnie - prawie same 4... Bardzo wysoką zmienność mają mode, spechiness, acousticness i instrumentalness, aż zaczynam się zastanawiać, czy nie zbyt wysoką. Tak duże współczynniki prawdopodobnie mogą oznaczać duże rozbicie danych, a więc potencjalnie sporo outlierów. Ale na razie pozbywam się tylko time_signature.
 
 ```{r}
 head(top2018)
@@ -81,34 +91,27 @@ top_scale<-scale(top)
 round(cor(top_scale,method="kendall"),2)
 ggcorrplot(round(cor(top_scale,method="kendall"),2))
 head(top_scale,10)
-#head(top2018,10)
-#top[44,]
-#help(plot)
 boxplot(top_scale)
 summary(top_scale)
-#for (i in 1:13){
-#  plot(top[,i])
-#}
 ```
 
 Skalowanie wypadło pomyślnie i współczynniki korelacji prezentują się wciąż bardzo dobrze, natomiast wykresy pudełkowe i wartości na moduł potwierdzają to, co wcześniej sugerowały "zwykłe" ploty - w danych jest sporo obserwacji odstających. Występują one w zmiennych danceability, speechiness, acousticness, instrumentalness, liveness oraz duration_ms.
 
-Zrobię coś, co prawdopodobnie powinno zostać wykonane wcześniej.
+Żeby ułatwić sobie usunięcie outlierów, "przerobię" macierz z danymi na data frame, oraz dodam ID, będące pozycją utworu w rankingu.
 
 ```{r}
-top_df<-as.data.frame(top_scale)
 boxplot(top_scale)
+top_df<-as.data.frame(top_scale)
 top_df<-rownames_to_column(top_df,var='track')
 filtr<-filter(top_df, danceability < -3 | speechiness > 3 | acousticness >3 | instrumentalness > 3 | liveness > 3 | duration_ms >3)
 top_df<-column_to_rownames(top_df,var="track")
 top_df2<-top_df[(top_df$danceability>-3)&(top_df$speechiness<3)&(top_df$acousticness<3)&(top_df$instrumentalness<3)&(top_df$liveness<3)&(top_df$duration_ms<3),]
 top_df2
-#filter(top_df2, danceability < -3 | speechiness > 3 | acousticness >3 | instrumentalness > 3 | liveness > 3 | duration_ms >3)
 boxplot(top_df2)
 summary(top_df2)
 ```
 
-Po oczyszczeniu danych z obserwacji odstających, do dyspozycji mam 89 utworów. Wśród rekordów, które musiałem usunąć, znalazł się utwór "God's Plan" Drake'a. Najczęściej odtwarzana piosenka w 2018, która w chwili tworzenia projektu ma ponad 1,4 mld odsłuchań w serwisie, była outlierem ze względu na zbyt duży współczynnik liveness. Pozostałe outliery prezentują się następująco:
+Po oczyszczeniu danych z obserwacji odstających, do dyspozycji mam 89 utworów. Wśród elementów, które musiałem usunąć, znalazł się utwór "God's Plan" Drake'a. Najczęściej odtwarzana piosenka w 2018, która w chwili tworzenia projektu ma ponad 1,4 mld odsłuchań w serwisie, była outlierem ze względu na zbyt duży współczynnik liveness. Lista wszystkich wykluczonych obserwacji prezentuje się następująco:
 
 ```{r}
 filtr
@@ -128,20 +131,22 @@ Mogę zająć się teraz funkcją odległości.
 
 ```{r}
 odl<-dist(top_df2)
-#head(odl)
 ```
 
 ```{r}
 ward<-hclust(odl,method="ward.D2")
-#help(plot)
 str(ward)
 ward_d<-as.dendrogram(ward)
 ward_d
 
-#help(par)
 par(mfrow=c(3,1))
 
 plot(ward_d)
+```
+
+Teoretycznie wszystko działa, ale wykres nie prezentuje się zbyt atrakcyjnie. Odczytanie z niego czegokolwiek jest niemożliwe, należy więc podzielić dendrogram na kilka części.
+
+```{r}
 plot(cut(ward_d,h=8)$upper, main="Część górna, ucięta na h=8")
 plot(cut(ward_d,h=8)$lower[[1]],main="Cz. 1 dolna, h=10")
 plot(cut(ward_d,h=8)$lower[[2]],main="Cz. 2 dolna, h=10")
@@ -153,46 +158,69 @@ plot(cut(ward_d,h=8)$lower[[6]],main="Cz. 6 dolna, h=10")
 #cut<-cutree(ward,k=10);plot(ward,hang=-1);rect.hclust(ward,k=10)
 ```
 
-Ze względu na ilość danych, podzielenie dendrogramu wydaje się najrozsądniejszą opcją. Po obejrzeniu danych, przechodzę do próby podziału.
+__tu muszę jeszcze pobawić się z etykietami__
+Po obejrzeniu wykresów, przechodzę do próby podziału.
+
+```{r}
+sylwetka<-c()
+g1<-c()
+g2<-c()
+g3<-c()
+for(i in 2:16){
+  podzial<-cutree(ward,k=i)
+  sylwetka[i]=index.S(odl,podzial)
+  g1[i]=index.G1(odl,podzial)
+  g2[i]=index.G2(odl,podzial)
+  g3[i]=index.G3(odl,podzial)
+}
+plot(sylwetka,typ="b")
+plot(g2,typ="b")
+plot(g1,typ="b")
+plot(g3,typ="b")
+```
+
+Indeksy G1, G2 oraz Silhoutte szukają wartości jak najwyższej, gdy G3 - jak najniższej. Jak widać, uzyskane wyniki nie są jednoznaczne. Chciałbym uniknąć ilości skupień większej niż 10, o ile nie okaże się to konieczne. Indeksy sugerują kolejno:
+Sylwetkowy - 6, ew. 9, 10
+G1 - ciężko wywnioskować coś rozsądnego, wydaje się, że mniej więcej ok. 7 spadki stają się mniej gwałtowne, ale już od 5 są całkiem płynne, więc najpewniej 5.
+G2 - 6, 8, ew. więcej
+G3 - 3, 6, 10, ciekawy wydaje się niski współczynnik dla 9
+
+Analizując powyższe wyniki, spróbuję zacząć od k=6.
 
 ```{r}
 ward
 top_ward<-top_df2
 top_ward$grupa<-cutree(ward,k=6)
-head(top_ward)
+top_ward$grupa
 ```
 
 ```{r}
-sylwetka<-c()
-for(i in 2:16){
-  podzial<-cutree(ward,k=i)
-  sylwetka[i]=index.S(odl,podzial)
+mean_6<-matrix(NA,12,6)
+sd_6<-matrix(NA,12,6)
+rownames(mean_6)<-colnames(top_ward[,1:12])
+colnames(mean_6)<-c("I","II","III","IV","V","VI")
+rownames(sd_6)<-colnames(top_ward[,1:12])
+colnames(sd_6)<-c("I","II","III","IV","V","VI")
+for (i in 1:12){
+  mean_6[i,]=tapply(top_ward[,i],top_ward$grupa,mean)  
+  sd_6[i,]=tapply(top_ward[,i],top_ward$grupa,sd) 
 }
-plot(sylwetka,typ="b")
+round(mean_6,3)
+round(sd_6,3)
 ```
 
+Dysponuje podstawowymi informacjami na temat moich grup, spróbuję więc pokusić się o lekką charakterystykę, na razie bez wiedzy jakie piosenki znajdują się w poszczególnych grupach.
+__I__ - średnio taneczne, bardzo energiczne, raczej na niskich kluczach (choć nie jest to mocna reguła, ze względu na wysokie odchylenie standardowe), najgłośniejsza ze wszystkich grup, o średniej modalności; stosunkowo dużo jest utworów, w których nie ma zbyt wielu słów, utwory nie są szczególnie akustyczne ani instrumentalne (parametr __instrumentalness__ wypadł dość podobnie właściwe dla wszystkich grup). Piosenki są średnio raczej "typowo" żywe, wesołe (wyraźnie najwyższa średnia ze wszystkich grup, więc jest to czynnik wyróżniający tę grupę, wolne (również najmniejsza średnia, a również odchylenie), ciut krótsze od typowego utworu.
+__II__ - utwory nie nadające się do tańca, nieszczególnie energiczne, o uśrednionym kluczu najpewniej w okolicach F. Nie wyróżniają się w żadną ze stron pod względem głośności, modalność jest dość wysoka. Średnia ilość słów, akustyczność oraz instrumentalność podobna jak w grupie __I__, za to jest najżywsza z grup. W przeciwieństwie do poprzedniej grupy, piosenki tu zebrane są bardzo "smutne", o stosunkowo umiarkowanym tempie, zauważalnie dłuższe od średniej.
+__III__ - piosenki, które niezbyt zachęcają do tańca (duże odchylenie standardowe, więc nie jest to bezwzględna zasada), zdecydowanie nie są energiczne, (również dużo odchylenie, wyższe nawet od grupy VI, gromadzącej obserwacje skrajne w tej kategorii), w prawdopodobnie nieco wyższych partiach dźwięku, za to dość ciche (bądź o wielu cichych momentach). __mode__ na średnim poziomie. Utwory z tej grupy mają nieco więcej słów, są mocno akustyczne, niezbyt żywiołowe ani wesołe. Raczej wolne, dość krótkie (wysokie odchylenie).
+__IV__ - ta grupa nie wyróżnia się pod względem taneczności, jest raczej energiczna, na wysokich dźwiękach przy minorowym module. Piosenki dość głośne, bez wielu słów, nie mają w sobie elementów akustycznych. Przeciętne pod względem żywości, wprawiające w dobry nastrój, stosunkowo szybkie, o mniej więcej typowej długości.
+__V__ - piosenki świetnie nadające się na zabawę taneczną, choć raczej w późniejszych godzinach, kiedy uczestnicy będą zmęczeni - utwory z grupy __V__ nie są energiczne, głośne, bardzo żywe ani wesołe. Cechują się najpewniej nieco większym udziałem wokalistów, niż wcześniejsze grupy, w teorii są najkrótsze, obok grupy __III__.
+__VI__ - ostatni klaster zbiera długie, szybkie, raczej energiczne i zachęcające do tańca utwory, w których jest dużo śpiewu, a wysokość dźwięku raczej niska. Zastanawiające jest zerowe odchylenie standardowe przy __mode__ (najwyższa średnia z grup, wartości blisko major) oraz __instrumentalness__. Piosenki nie mają prawie partii akustycznych, są niezbyt żywiołowe, ale pogodne.
 
 ```{r}
-
-top2018$grupa<-cutree(ward,k=5)
-top2018$grupa
-```
-
-```{r}
-srednie<-matrix(NA,6,12)
-colnames(srednie)<-colnames(top_ward[,1:12])
-rownames(srednie)<-c("I","II","III","IV","V","VI")
 for (i in 1:6){
-  for (j in 1:12){
-    srednie[i,]=tapply(top_ward[,j],top_ward$grupa,mean)    
-  }
+  print(i)
+  print(rownames(top_ward[top_ward$grupa==i,]))
 }
-srednie
-#W TYM MOMENCIE EWIDENTNIE COŚ NIE DZIAŁA
-```
-
-```{r}
-
-
 
 ```
