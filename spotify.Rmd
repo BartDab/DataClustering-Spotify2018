@@ -23,9 +23,9 @@ Analizowany przeze mnie zbiór to dane dotyczące 100 najpopularniejszych piosen
 - __time_signature__ - szcowane metrum, liczba uderzeń na takt.
 Rozważałem także użycie jako zmiennej artysty, ale wystąpiłoby zbyt duże rozdrobnienie - o ile Drake czy Post Malone mają po 6 utworów w Top 100, o tyle zdecydowana większość artystów ma tylko jedno dzieło w rankingu.
 
-Z takimi danymi zamierzam wyodrębnić kilka grup i zauważyć, czy występują jakieś szczególne zależności w danych. Pytania, które stawiam sobie i danym:
+Z takimi danymi zamierzam wyodrębnić kilka grup i zauważyć, czy można zaobserwować szczególne zależności w danych. Pytania, które stawiam sobie i danym:
 - czy można zauważyć "przepis na hit", a więc czy pewna kombinacja parametrów jest wyraźnie dominująca?
-- czy piosenki będące na szczycie listy należą do jednej grupy, czy są podobne?
+- czy piosenki będące na szczycie listy należą do jednej grupy; czy są podobne?
 - czy dużo utworów odbiega od ogólnie przyjętego, "mainstreamowego" schematu (czy dużo jest outlierów)?
 Wraz z przeprowadzaniem analizy zapewne pojawią się inne kwestie, na które, mam nadzieję, uda się odpowiedzieć.
 
@@ -43,7 +43,7 @@ library(ape)
 Importuję swoje dane i delikatnie je obrabiam - usuwam zbędną do analizy kolumnę __id__, a __name__ i __artists__, wraz z nowoutworzonym __id__, czyli numerem, łączę i ustawiam jako nazwę wierszy - w ten sposób będę mógł łatwo identyfikować utwory, oraz widzieć, które miejsce zajmują w rankingu odsłuchań.
 
 ```{r}
-top2018<-read.csv("E:/R/top2018.csv", header=TRUE, sep=",")
+top2018<-read.csv("E:/R/spotify/top2018.csv", header=TRUE, sep=",")
 top2018<-top2018[,-1]
 top2018<-unite(top2018, track, into=c("artists","name"), sep=' - ')
 top2018 <- top2018 %>% mutate(id = row_number())
@@ -72,18 +72,18 @@ for (i in 1:13)(
 wz
 ```
 
-Widać, że time_signature to zmienna quasi-stała, co znajduje potwierdzenie po przejrzeniu danych w kolumnie - prawie same 4... Bardzo wysoką zmienność mają mode, spechiness, acousticness i instrumentalness, aż zaczynam się zastanawiać, czy nie zbyt wysoką. Tak duże współczynniki prawdopodobnie mogą oznaczać duże rozbicie danych, a więc potencjalnie sporo outlierów. Ale na razie pozbywam się tylko time_signature.
+Widać, że time_signature to zmienna quasi-stała, co znajduje potwierdzenie po przejrzeniu danych w kolumnie - prawie wszystkie obserwacje mają wartość "4". Bardzo wysoką zmienność mają mode, spechiness, acousticness i instrumentalness. Tak duże współczynniki prawdopodobnie mogą oznaczać duże rozbicie danych, a więc potencjalnie sporo outlierów. Na tym etapie usuwam tylko time_signature.
 
 ```{r}
-head(top2018)
+#head(top2018)
 top<-top2018[,-13:-14]
-head(top)
-for (i in 1:12){
-  plot(top[,i])
-}
+#head(top2018)
+#for (i in 1:12){
+#  plot(top[,i])
+#}
 ```
 
-Widać kilka kandydatów na outlierów, ale tym zajmę się za chwilę.
+Widać kilku kandydatów na outlierów, ale tym zajmę się za chwilę.
 Kolejnym etapem jest skalowanie danych, po czym sprawdzę, jak prezentują się na wykresie.
 
 ```{r}
@@ -95,7 +95,7 @@ boxplot(top_scale)
 summary(top_scale)
 ```
 
-Skalowanie wypadło pomyślnie i współczynniki korelacji prezentują się wciąż bardzo dobrze, natomiast wykresy pudełkowe i wartości na moduł potwierdzają to, co wcześniej sugerowały "zwykłe" ploty - w danych jest sporo obserwacji odstających. Występują one w zmiennych danceability, speechiness, acousticness, instrumentalness, liveness oraz duration_ms.
+Skalowanie wypadło pomyślnie i współczynniki korelacji prezentują się wciąż bardzo dobrze, natomiast wykresy pudełkowe i wartości na moduł oznaczają, że w danych jest sporo obserwacji odstających. Występują one w zmiennych danceability, speechiness, acousticness, instrumentalness, liveness oraz duration_ms.
 
 Żeby ułatwić sobie usunięcie outlierów, "przerobię" macierz z danymi na data frame, oraz dodam ID, będące pozycją utworu w rankingu.
 
@@ -158,7 +158,7 @@ plot(cut(ward_d,h=8)$lower[[6]],main="Cz. 6 dolna, h=10")
 #cut<-cutree(ward,k=10);plot(ward,hang=-1);rect.hclust(ward,k=10)
 ```
 
-__tu muszę jeszcze pobawić się z etykietami__
+__something's fucky__
 Po obejrzeniu wykresów, przechodzę do próby podziału.
 
 ```{r}
@@ -181,11 +181,11 @@ plot(g3,typ="b")
 
 Indeksy G1, G2 oraz Silhoutte szukają wartości jak najwyższej, gdy G3 - jak najniższej. Jak widać, uzyskane wyniki nie są jednoznaczne. Chciałbym uniknąć ilości skupień większej niż 10, o ile nie okaże się to konieczne. Indeksy sugerują kolejno:
 Sylwetkowy - 6, ew. 9, 10
-G1 - ciężko wywnioskować coś rozsądnego, wydaje się, że mniej więcej ok. 7 spadki stają się mniej gwałtowne, ale już od 5 są całkiem płynne, więc najpewniej 5.
+G1 - od około 6-7 spadki wydają się być stosunkowo płynne.
 G2 - 6, 8, ew. więcej
-G3 - 3, 6, 10, ciekawy wydaje się niski współczynnik dla 9
+G3 - 5, 8, 9
 
-Analizując powyższe wyniki, spróbuję zacząć od k=6.
+Analizując powyższe wyniki, decyduję się na k=6.
 
 ```{r}
 ward
@@ -209,13 +209,13 @@ round(mean_6,3)
 round(sd_6,3)
 ```
 
-Dysponuje podstawowymi informacjami na temat moich grup, spróbuję więc pokusić się o lekką charakterystykę, na razie bez wiedzy jakie piosenki znajdują się w poszczególnych grupach.
-__I__ - średnio taneczne, bardzo energiczne, raczej na niskich kluczach (choć nie jest to mocna reguła, ze względu na wysokie odchylenie standardowe), najgłośniejsza ze wszystkich grup, o średniej modalności; stosunkowo dużo jest utworów, w których nie ma zbyt wielu słów, utwory nie są szczególnie akustyczne ani instrumentalne (parametr __instrumentalness__ wypadł dość podobnie właściwe dla wszystkich grup). Piosenki są średnio raczej "typowo" żywe, wesołe (wyraźnie najwyższa średnia ze wszystkich grup, więc jest to czynnik wyróżniający tę grupę, wolne (również najmniejsza średnia, a również odchylenie), ciut krótsze od typowego utworu.
-__II__ - utwory nie nadające się do tańca, nieszczególnie energiczne, o uśrednionym kluczu najpewniej w okolicach F. Nie wyróżniają się w żadną ze stron pod względem głośności, modalność jest dość wysoka. Średnia ilość słów, akustyczność oraz instrumentalność podobna jak w grupie __I__, za to jest najżywsza z grup. W przeciwieństwie do poprzedniej grupy, piosenki tu zebrane są bardzo "smutne", o stosunkowo umiarkowanym tempie, zauważalnie dłuższe od średniej.
-__III__ - piosenki, które niezbyt zachęcają do tańca (duże odchylenie standardowe, więc nie jest to bezwzględna zasada), zdecydowanie nie są energiczne, (również dużo odchylenie, wyższe nawet od grupy VI, gromadzącej obserwacje skrajne w tej kategorii), w prawdopodobnie nieco wyższych partiach dźwięku, za to dość ciche (bądź o wielu cichych momentach). __mode__ na średnim poziomie. Utwory z tej grupy mają nieco więcej słów, są mocno akustyczne, niezbyt żywiołowe ani wesołe. Raczej wolne, dość krótkie (wysokie odchylenie).
-__IV__ - ta grupa nie wyróżnia się pod względem taneczności, jest raczej energiczna, na wysokich dźwiękach przy minorowym module. Piosenki dość głośne, bez wielu słów, nie mają w sobie elementów akustycznych. Przeciętne pod względem żywości, wprawiające w dobry nastrój, stosunkowo szybkie, o mniej więcej typowej długości.
-__V__ - piosenki świetnie nadające się na zabawę taneczną, choć raczej w późniejszych godzinach, kiedy uczestnicy będą zmęczeni - utwory z grupy __V__ nie są energiczne, głośne, bardzo żywe ani wesołe. Cechują się najpewniej nieco większym udziałem wokalistów, niż wcześniejsze grupy, w teorii są najkrótsze, obok grupy __III__.
-__VI__ - ostatni klaster zbiera długie, szybkie, raczej energiczne i zachęcające do tańca utwory, w których jest dużo śpiewu, a wysokość dźwięku raczej niska. Zastanawiające jest zerowe odchylenie standardowe przy __mode__ (najwyższa średnia z grup, wartości blisko major) oraz __instrumentalness__. Piosenki nie mają prawie partii akustycznych, są niezbyt żywiołowe, ale pogodne.
+Dysponuję podstawowymi informacjami na temat moich grup, spróbuję więc scharakteryzować wygenerowane grupy:
+__I__ - średnio taneczne, bardzo energiczne, raczej na niskich kluczach (choć nie jest to mocna reguła, ze względu na wysokie odchylenie standardowe), najgłośniejsza ze wszystkich grup, o średniej modalności; stosunkowo dużo jest utworów, w których nie ma zbyt wielu słów, utwory nie są szczególnie akustyczne ani instrumentalne (parametr __instrumentalness__ wypadł dość podobnie właściwe dla wszystkich grup). Piosenki są średnio raczej "typowo" żywe, wesołe (wyraźnie najwyższa średnia ze wszystkich grup, więc jest to czynnik wyróżniający tę grupę, wolne (również najmniejsza średnia, a również odchylenie), ciut krótsze od typowego utworu. Po spojrzeniu, co trafiło do tego klastra, można stwierdzić, że opis się zgadza - choć obecność utworu "SAD!" od rapera XXXTENTACION w teoretycznie najweselszej grupie może wydawać się ironiczna, ciężko mi z wybranych 24 piosenek wskazać taką, która nie brzmi energicznie, większość jest też całkiem pogodna, jak "Shape of You" Eda Sheerana, "Echame La Culpa" Luisa Fonsi, "Taki Taki" DJa Snake'a czy "Happier" od Marshmello. Jak w każdej grupie, znalazło się tu kilka utworów rapowych/trapowych, czego nie da się uniknąć ze względu na popularność tych gatunków we współczesnej muzyce, jest tu chyba jednak najliczniejsza reprezentacja muzyki tanecznej/klubowej (Marshmello, Tiesto, DJ Snake, Zedd, Jonas Blue), głównie tej spokojniejszej części, gdyż bardziej dynamiczne utwory z gatunku trafiły do IV.
+__II__ - utwory nie nadające się do tańca, nieszczególnie energiczne, o uśrednionym kluczu najpewniej w okolicach F. Nie wyróżniają się w żadną ze stron pod względem głośności, modalność jest dość wysoka. Średnia ilość słów, akustyczność oraz instrumentalność podobna jak w grupie __I__, za to jest najżywsza z grup. W przeciwieństwie do poprzedniej grupy, piosenki tu zebrane są bardzo "smutne", o stosunkowo umiarkowanym tempie, zauważalnie dłuższe od średniej. Po sprawdzeniu zawartości grupy uważam, że i tu wszystko - oczywiście subiektywnie - się zgadza. Największe hity Post Malone, "Perfect" Eda Sheerana czy "God is a woman" Ariany Grande raczej nie wprawią w dobry nastrój, i cieżko mi sobie wyobrazić, jak podbijają parkiety. Wyjątki, takie jak "I Miss You" Clean Bandit czy "In My Mind" Dynoro, można wytłumaczyć odchyleniem standardowym, i najpewniej podobieństwem w aspektach, których mniej wprawione ucho, tak jak moje, nie jest w stanie dostrzec.
+__III__ - piosenki, które niezbyt zachęcają do tańca (duże odchylenie standardowe, więc nie jest to bezwzględna zasada), zdecydowanie nie są energiczne, (również dużo odchylenie, wyższe nawet od grupy VI, gromadzącej obserwacje skrajne w tej kategorii), w prawdopodobnie nieco wyższych partiach dźwięku, za to dość ciche (bądź o wielu cichych momentach). __mode__ na średnim poziomie. Utwory z tej grupy mają nieco więcej słów, są mocno akustyczne, niezbyt żywiołowe ani wesołe. Raczej wolne, dość krótkie (wysokie odchylenie). Do grupy trafiło 8 piosenek, i słuchając ich, łatwo zrozumieć wysoką średnią przy __acousticness__ i niską przy __energy__. Utwory Sama Smitha czy Eda Sheerana, które tu trafiły, wydają się wręcz wzorcowymi przykładami.
+__IV__ - ta grupa nie wyróżnia się pod względem taneczności, jest raczej energiczna, na wysokich dźwiękach przy minorowym module. Piosenki dość głośne, bez wielu słów, nie mają w sobie elementów akustycznych. Przeciętne pod względem żywości, wprawiające w dobry nastrój, stosunkowo szybkie, o mniej więcej typowej długości. Obok __I__, najwięcej jest tu piosenek, które można by uznać za reprezentujące EDM/dance, co wyjaśnia wysoką energię, tempo i mało akustyczności.
+__V__ - piosenki świetnie nadające się na zabawę taneczną, choć raczej w późniejszych godzinach, kiedy uczestnicy będą zmęczeni - utwory z grupy __V__ nie są energiczne, głośne, bardzo żywe ani wesołe. Cechują się najpewniej nieco większym udziałem wokalistów, niż wcześniejsze grupy, w teorii są najkrótsze, obok grupy __III__. "Havanę" Camili Cabello, "HUMBLE." Kendricka Lamara, "Girls Like You" Maroon 5 subiektywnie uznaję za dobrze pasujące do powyższej charakterystyki.
+__VI__ - ostatni klaster zbiera długie, szybkie, raczej energiczne i zachęcające do tańca utwory, w których jest dużo śpiewu, a wysokość dźwięku raczej niska. Zastanawiające jest zerowe odchylenie standardowe przy __mode__ (najwyższa średnia z grup, wartości blisko major) oraz __instrumentalness__. Piosenki nie mają prawie partii akustycznych, są niezbyt żywiołowe, ale pogodne. Trafiło tu zaledwie 5 obserwacji, reprezentują one rap/trap, i wydają się być dobrze dopasowane do opisu.
 
 ```{r}
 for (i in 1:6){
@@ -224,3 +224,40 @@ for (i in 1:6){
 }
 
 ```
+
+__TU ZNAJDZIE SIĘ COŚ A'LA PODSUMOWANIE PIERWSZEJ CZĘŚCI__
+
+Drugim algorytmem, który zamierzam wykorzystać, jest popularna metoda k-średnich. Polega ona na losowym przyporządkowaniu punktów do skupień, zbudowaniu centroid grup, po czym zmienianiu przypisania punktów na takie, do którego centroidy jest im najbliżej. Procedurę powtarza się aż do momentu, gdy nie zachodzą zmiany. Z racji, że początkowe przypisanie jest losowe, metoda może dawać różne wyniki na tych samych danych, nie powinny jednak odbiegać od siebie bardzo mocno.
+
+```{r}
+set.seed(123)
+top_kmeans<-kmeans(top_df2,6,nstart=1000)
+#top_kmeans
+str(top_kmeans)
+top_kmeans$centers
+```
+
+Grupy wygenerowane przez metodę k-średnich prezentują się następująco:
+__1__ - wysoka tenczność, niska energia, raczej ciche, przeciętna ilość słów, niezbyt żywe, stosunkowo "smutne". Dużo podobieństw z grupą __V__ z metody Warda, sporo utworów znalazło się w obu grupach (Dua Lipa - IDGAF, Maroon 5 - Girlks Like You, Kendrick Lamar - HUMBLE., Wolfine - Bella, Khalid - Young Dumb & Broke...)
+__2__ - umiarkowanie energiczne, bogate w wokal, pogodne, o wysokim BPM. Grupa niemal w całości zawiera w sobie __VI__ z metody Warda (jedynie "Walk It Talk It" grupy Migos trafiło do innego klastra), oraz rapowe utwory z __IV__, co znajduje odzwierciedlenie w wysokich współczynnikach __tempo__ i __speechiness__.
+__3__ - grupa składa się z utworów głośnych, energicznych, bardzo pozytywnych i raczej wolnych.
+
+
+
+```{r}
+top_df3<-as.data.frame(top_df_matrix)
+head(top_df3)
+top_df3$grupa_ward<-top_ward$grupa
+top_df3$grupa_kmeans<-top_kmeans$cluster
+#top_df2
+```
+
+```{r}
+
+for (i in 1:6){
+  print(i)
+  print(rownames(top_df3[top_df3$grupa_kmeans==i,]))
+}
+
+```
+
